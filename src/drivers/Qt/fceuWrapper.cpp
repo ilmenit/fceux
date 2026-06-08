@@ -25,6 +25,7 @@
 #include <limits.h>
 #include <unzip.h>
 
+#include <QCoreApplication>
 #include <QFileInfo>
 #include <QStyleFactory>
 #include "Qt/main.h"
@@ -49,6 +50,9 @@
 #include "Qt/ConsoleUtilities.h"
 #include "Qt/TasEditor/TasEditorWindow.h"
 #include "Qt/fceux_git_info.h"
+#ifdef ENABLE_BRIDGE
+#include "bridge/BridgeServer.h"
+#endif
 
 #include "common/cheat.h"
 #include "../../fceu.h"
@@ -630,6 +634,10 @@ void fceuWrapperRequestAppExit(void)
 	if ( consoleWindow )
 	{
 		consoleWindow->requestClose();
+	}
+	else if ( QCoreApplication::instance() != nullptr )
+	{
+		QCoreApplication::quit();
 	}
 }
 
@@ -1433,6 +1441,10 @@ bool fceuWrapperTryLock(int timeout)
 	{
 		lockAcq = consoleWindow->emulatorMutex.tryLock( timeout );
 	}
+	else
+	{
+		lockAcq = true;
+	}
 	mutexPending--;
 
 	if ( lockAcq )
@@ -1525,7 +1537,14 @@ int  fceuWrapperUpdate( void )
 		}
 #endif
 
+		const int bridgeFrameBefore = currFrameCounter;
 		DoFun(frameskip, periodic_saves);
+#ifdef ENABLE_BRIDGE
+		if (currFrameCounter != bridgeFrameBefore)
+		{
+			FCEUXBridge::NotifyFrameCompleted(currFrameCounter);
+		}
+#endif
 	
 #ifdef __FCEU_QSCRIPT_ENABLE__
 		if (scriptsLoaded)
@@ -2054,4 +2073,3 @@ bool FCEUD_ShouldDrawInputAids(void)
 void FCEUD_TurboOn (void) { turbo = true; };
 void FCEUD_TurboOff   (void) { turbo = false; };
 void FCEUD_TurboToggle(void) { turbo = !turbo; };
-

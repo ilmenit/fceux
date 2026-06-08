@@ -22,12 +22,16 @@
 #include <QApplication>
 #include <QSplashScreen>
 #include <QSettings>
+#include <QTimer>
 //#include <QProxyStyle>
 
 #include "Qt/ConsoleWindow.h"
 #include "Qt/fceuWrapper.h"
 #include "Qt/SplashScreen.h"
 #include "Qt/QtScriptManager.h"
+#ifdef ENABLE_BRIDGE
+#include "bridge/BridgeServer.h"
+#endif
 
 #if defined(WIN32) 
 #include <windows.h>
@@ -106,6 +110,10 @@ int main( int argc, char *argv[] )
 {
 	int retval = 0;
 
+#ifdef ENABLE_BRIDGE
+	FCEUXBridge::PreParseArgs(&argc, argv);
+#endif
+
 	fceuWrapperPreInit(argc, argv);
 
 	qInstallMessageHandler(MessageOutput);
@@ -115,9 +123,22 @@ int main( int argc, char *argv[] )
 	QCoreApplication::setOrganizationDomain("TasEmulators.org");
 	QCoreApplication::setApplicationName("fceux");
 
+#ifdef ENABLE_BRIDGE
+	const bool bridgeHeadless = FCEUXBridge::GetConfig().headless;
+	if ( bridgeHeadless )
+	{
+		if ( !FCEUXBridge::Start() )
+		{
+			return 1;
+		}
+	}
+#else
+	const bool bridgeHeadless = false;
+#endif
+
 	fceuSplashScreen *splash = NULL;
 	
-	if ( showSplashScreen() )
+	if ( !bridgeHeadless && showSplashScreen() )
 	{
 		splash = new fceuSplashScreen();
 		splash->show();
@@ -155,6 +176,36 @@ int main( int argc, char *argv[] )
 
 	fceuWrapperInit( argc, argv );
 
+#ifdef ENABLE_BRIDGE
+	if ( !bridgeHeadless && !FCEUXBridge::Start() )
+	{
+		fceuWrapperMemoryCleanup();
+		return 1;
+	}
+#endif
+
+	if ( bridgeHeadless )
+	{
+		const QString initialRom = FCEUXBridge::GetConfig().initialRom;
+		if ( !initialRom.isEmpty() )
+		{
+			QTimer::singleShot(0, [initialRom]() {
+				LoadGame(initialRom.toLocal8Bit().constData(), true);
+			});
+		}
+		QTimer emuTimer;
+		QObject::connect(&emuTimer, &QTimer::timeout, []() {
+			fceuWrapperUpdate();
+		});
+		emuTimer.start(0);
+		retval = app.exec();
+#ifdef ENABLE_BRIDGE
+		FCEUXBridge::Stop();
+#endif
+		fceuWrapperMemoryCleanup();
+		return retval;
+	}
+
 	consoleWindow = new consoleWin_t();
 
 	consoleWindow->show();
@@ -181,10 +232,13 @@ int main( int argc, char *argv[] )
 
 	//printf("App Return: %i \n", retval );
 
+#ifdef ENABLE_BRIDGE
+	FCEUXBridge::Stop();
+#endif
+
 	delete consoleWindow;
 
 	fceuWrapperMemoryCleanup();
 
 	return retval;
 }
-

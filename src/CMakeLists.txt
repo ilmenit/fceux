@@ -5,6 +5,13 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
+option(ENABLE_BRIDGE "Enable local automation bridge for external tools" ON)
+
+if (${ENABLE_BRIDGE})
+	message( STATUS "FCEUX Bridge Enabled")
+	add_definitions( -DENABLE_BRIDGE )
+endif()
+
 if (${PUBLIC_RELEASE})
 	add_definitions( -DPUBLIC_RELEASE=1 )
 endif()
@@ -697,6 +704,30 @@ set(SRC_DRIVERS_SDL
   ${CMAKE_CURRENT_SOURCE_DIR}/drivers/Qt/TasEditor/snapshot.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/drivers/Qt/TasEditor/markers.cpp
 )
+
+if (${ENABLE_BRIDGE})
+  list(APPEND SRC_DRIVERS_SDL
+    ${CMAKE_CURRENT_SOURCE_DIR}/bridge/BridgeApu.cpp
+			${CMAKE_CURRENT_SOURCE_DIR}/bridge/BridgeCart.cpp
+			${CMAKE_CURRENT_SOURCE_DIR}/bridge/BridgeCdLog.cpp
+			${CMAKE_CURRENT_SOURCE_DIR}/bridge/BridgeCpu.cpp
+			${CMAKE_CURRENT_SOURCE_DIR}/bridge/BridgeDebugger.cpp
+			${CMAKE_CURRENT_SOURCE_DIR}/bridge/BridgeExecution.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/bridge/BridgeInput.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/bridge/BridgeHistory.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/bridge/BridgeJson.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/bridge/BridgeLifecycle.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/bridge/BridgeLua.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/bridge/BridgeMemory.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/bridge/BridgeProtocol.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/bridge/BridgePpu.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/bridge/BridgeScheduler.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/bridge/BridgeScreen.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/bridge/BridgeServer.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/bridge/BridgeStateStore.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/bridge/BridgeSymbols.cpp
+  )
+endif()
 
 set(SOURCES ${SRC_CORE} ${SRC_DRIVERS_COMMON} ${SRC_DRIVERS_SDL})
 

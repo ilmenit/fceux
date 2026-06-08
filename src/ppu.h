@@ -40,6 +40,11 @@ void FFCEUX_PPUWrite_Default(uint32 A, uint8 V);
 
 extern int g_rasterpos;
 extern uint8 PPU[4];
+extern uint8 PPUSPL;
+extern uint8 SpriteDMA;
+extern uint8 vtoggle;
+extern uint32 TempAddr, RefreshAddr;
+extern int scanline;
 extern bool DMC_7bit;
 extern bool paldeemphswap;
 

@@ -1,4 +1,3 @@
-#ifdef _S9XLUA_H
 #ifndef _FCEULUA_H
 #define _FCEULUA_H
 
@@ -68,6 +67,9 @@ int FCEU_LoadLuaCode(const char *filename, const char *arg=NULL);
 void FCEU_ReloadLuaCode();
 void FCEU_LuaStop();
 int FCEU_LuaRunning();
+int FCEU_LuaBridgeEval(const char* code, char* output, unsigned int outputSize, char* error, unsigned int errorSize);
+int FCEU_LuaBridgeEvalLen(const char* code, unsigned int codeSize, char* output, unsigned int outputSize, char* error, unsigned int errorSize);
+int FCEU_LuaBridgeEvalJson(const char* code, unsigned int codeSize, char* resultJson, unsigned int resultJsonSize, char* output, unsigned int outputSize, char* error, unsigned int errorSize, char* traceback, unsigned int tracebackSize);
 
 void FCEU_LuaReadZapper(const uint32* mouse_in, uint32* mouse_out);
 uint8 FCEU_LuaReadJoypad(int,uint8); // HACK - Function needs controller input
@@ -85,5 +87,4 @@ char* FCEU_GetLuaScriptName();
 char *FCEU_GetFreezeFilename(int slot);
 
 
-#endif
 #endif
