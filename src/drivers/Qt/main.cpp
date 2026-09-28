@@ -146,10 +146,15 @@ int main( int argc, char *argv[] )
 	}
 
 	#ifdef WIN32
+	// Preserve launcher pipes/files, including the Bridge token announcement.
+	const DWORD stdoutType = GetFileType(GetStdHandle(STD_OUTPUT_HANDLE));
+	const DWORD stderrType = GetFileType(GetStdHandle(STD_ERROR_HANDLE));
 	if (AttachConsole(ATTACH_PARENT_PROCESS))
 	{
-		freopen("CONOUT$", "w", stdout);
-		freopen("CONOUT$", "w", stderr);
+		if (stdoutType != FILE_TYPE_PIPE && stdoutType != FILE_TYPE_DISK)
+			freopen("CONOUT$", "w", stdout);
+		if (stderrType != FILE_TYPE_PIPE && stderrType != FILE_TYPE_DISK)
+			freopen("CONOUT$", "w", stderr);
 	}
 	#endif
 	//app.setStyle( new MenuStyle() );
