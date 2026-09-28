@@ -10,7 +10,7 @@ import time
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'src/bridge/sdk/python'))
 from fceux_bridge import FceuxBridge
 
-env = dict(os.environ, QT_QPA_PLATFORM='offscreen', SDL_AUDIODRIVER='dummy')
+env = dict(os.environ, QT_QPA_PLATFORM='offscreen', SDL_AUDIODRIVER='dummy', SDL_VIDEODRIVER='dummy')
 with tempfile.TemporaryFile(mode='w+b') as log:
     process = subprocess.Popen(
         [str(Path(sys.argv[1]).resolve()), '--bridge-headless', '--bridge=tcp:127.0.0.1:0'],

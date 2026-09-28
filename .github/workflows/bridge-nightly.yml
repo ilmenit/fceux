@@ -61,8 +61,9 @@ jobs:
           version: '6.8.3'
           arch: win64_msvc2022_64
           cache: true
-      - name: Cache Windows dependency packages
-        uses: actions/cache@v4
+      - name: Restore Windows dependency packages
+        id: vcpkg-cache
+        uses: actions/cache/restore@v4
         with:
           path: ~/AppData/Local/vcpkg/archives
           key: windows-2022-vcpkg-${{ hashFiles('vcpkg/vcpkg.json') }}
@@ -74,6 +75,12 @@ jobs:
           Expand-Archive SDL2.zip -DestinationPath build/deps
           & "$env:VCPKG_INSTALLATION_ROOT/vcpkg.exe" install --triplet x64-windows --x-manifest-root=vcpkg --x-install-root=build/deps/vcpkg_installed
           if ($LASTEXITCODE -ne 0) { throw 'vcpkg failed' }
+      - name: Save Windows dependency packages
+        if: steps.vcpkg-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ~/AppData/Local/vcpkg/archives
+          key: windows-2022-vcpkg-${{ hashFiles('vcpkg/vcpkg.json') }}
       - name: Build
         shell: pwsh
         run: |

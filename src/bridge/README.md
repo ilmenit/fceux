@@ -61,7 +61,7 @@ From the extracted directory:
 
 On Windows use `./bin/fceux.exe` instead. To run without the emulator window,
 add `--bridge-headless`; a ROM path can follow the options. For unattended
-Linux sessions set `QT_QPA_PLATFORM=offscreen` and `SDL_AUDIODRIVER=dummy`.
+Linux sessions set `QT_QPA_PLATFORM=offscreen` and `SDL_AUDIODRIVER=dummy`, and `SDL_VIDEODRIVER=dummy`.
 The Bridge announces its token file on stderr. Use that path with the SDK:
 
 ```sh
