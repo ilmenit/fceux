@@ -116,6 +116,8 @@ jobs:
           Copy-Item src/drivers/win/lua/x64/*.dll "$stage/bin/"
           windeployqt --release --no-translations "$stage/bin/fceux.exe"
           if ($LASTEXITCODE -ne 0) { throw 'Qt deployment failed' }
+          # windeployqt selects qwindows only; Bridge headless mode needs offscreen.
+          Copy-Item "$env:QT_ROOT_DIR/plugins/platforms/qoffscreen.dll" "$stage/bin/platforms/"
           # Deploy MSVC runtime DLLs explicitly: windeployqt cannot always
           # locate them without a Visual Studio developer environment.
           $vswhere = "${env:ProgramFiles(x86)}/Microsoft Visual Studio/Installer/vswhere.exe"
@@ -125,6 +127,8 @@ jobs:
           Copy-Item "$($crt.FullName)/*.dll" "$stage/bin/"
           python pipelines/bridge_smoke.py "$stage/bin/fceux.exe"
           if ($LASTEXITCODE -ne 0) { throw 'Bridge smoke failed' }
+          python pipelines/bridge_smoke.py "$stage/bin/fceux.exe" --gui --platform windows
+          if ($LASTEXITCODE -ne 0) { throw 'Bridge GUI smoke failed' }
           python pipelines/bridge_package.py $stage
           if ($LASTEXITCODE -ne 0) { throw 'SDK packaging failed' }
           Compress-Archive $stage dist/FceuxBridge-nightly-windows-x86_64.zip
