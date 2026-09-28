@@ -39,7 +39,7 @@ later and system Qt5, SDL2, Lua 5.1, minizip, and libarchive libraries.
 On Ubuntu 22.04 install the runtime dependencies with:
 
 ```sh
-sudo apt-get install libqt5widgets5 libqt5opengl5 libqt5network5 libqt5help5 libqt5qml5 libqt5uitools5 libsdl2-2.0-0 liblua5.1-0 libminizip1 libarchive13
+sudo apt-get install libqt5widgets5 libqt5opengl5 libqt5network5 libqt5help5 libqt5qml5 libsdl2-2.0-0 liblua5.1-0 libminizip1 libarchive13
 ./bin/fceux
 ```
 
