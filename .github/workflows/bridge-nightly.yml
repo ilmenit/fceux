@@ -105,6 +105,13 @@ jobs:
           Copy-Item src/drivers/win/lua/x64/*.dll "$stage/bin/"
           windeployqt --release --no-translations "$stage/bin/fceux.exe"
           if ($LASTEXITCODE -ne 0) { throw 'Qt deployment failed' }
+          # Deploy MSVC runtime DLLs explicitly: windeployqt cannot always
+          # locate them without a Visual Studio developer environment.
+          $vswhere = "${env:ProgramFiles(x86)}/Microsoft Visual Studio/Installer/vswhere.exe"
+          $vs = & $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          $crt = Get-ChildItem "$vs/VC/Redist/MSVC/*/x64/Microsoft.VC143.CRT" -Directory | Sort-Object FullName -Descending | Select-Object -First 1
+          if (!$crt) { throw 'MSVC runtime directory not found' }
+          Copy-Item "$($crt.FullName)/*.dll" "$stage/bin/"
           python pipelines/bridge_smoke.py "$stage/bin/fceux.exe"
           if ($LASTEXITCODE -ne 0) { throw 'Bridge smoke failed' }
           python pipelines/bridge_package.py $stage
