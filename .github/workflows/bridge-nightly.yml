@@ -60,7 +60,6 @@ jobs:
         with:
           version: '6.8.3'
           arch: win64_msvc2022_64
-          modules: qttools
           cache: true
       - name: Install SDL2 and libarchive
         shell: pwsh
