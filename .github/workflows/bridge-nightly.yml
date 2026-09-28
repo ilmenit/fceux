@@ -2,9 +2,9 @@ name: FCEUX Bridge nightly
 
 on:
   push:
-    branches: [FceuxBridge]
+    branches: [master, FceuxBridge]
   pull_request:
-    branches: [FceuxBridge]
+    branches: [master, FceuxBridge]
   workflow_dispatch:
 
 permissions:
@@ -140,7 +140,7 @@ jobs:
 
   publish:
     needs: [linux, windows]
-    if: github.repository == 'ilmenit/fceux' && github.ref == 'refs/heads/FceuxBridge' && github.event_name != 'pull_request'
+    if: github.repository == 'ilmenit/fceux' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/FceuxBridge') && github.event_name != 'pull_request'
     runs-on: ubuntu-22.04
     permissions:
       contents: write
@@ -160,7 +160,7 @@ jobs:
           gh api --method PATCH "repos/$GH_REPO/git/refs/tags/nightly-bridge" -f sha="$GITHUB_SHA" -F force=true \
             || gh api --method POST "repos/$GH_REPO/git/refs" -f ref=refs/tags/nightly-bridge -f sha="$GITHUB_SHA"
           cat > /tmp/bridge-release.md <<EOF_NOTES
-          Rolling FCEUX Bridge build from \`FceuxBridge\`, commit \`$GITHUB_SHA\`.
+          Rolling FCEUX Bridge build from \`$GITHUB_REF_NAME\`, commit \`$GITHUB_SHA\`.
 
           Download the Windows x86_64 ZIP or Linux x86_64 tar.gz. Each includes the Qt emulator with Bridge enabled, Python SDK, examples, and documentation. Extract and read README.md for runtime requirements and usage. These are experimental prerelease builds.
           EOF_NOTES
