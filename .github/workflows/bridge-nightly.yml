@@ -23,10 +23,10 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y ninja-build qtbase5-dev qtdeclarative5-dev qttools5-dev libqt5opengl5-dev libsdl2-dev libminizip-dev libarchive-dev liblua5.1-0-dev libgl1-mesa-dev
+          sudo apt-get install -y --no-install-recommends ninja-build qtbase5-dev qtdeclarative5-dev qttools5-dev libqt5opengl5-dev qtwayland5 libsdl2-dev libminizip-dev libarchive-dev libgl1-mesa-dev libssl-dev libxml2-dev liblzma-dev libzstd-dev liblz4-dev libbz2-dev libacl1-dev nettle-dev curl patchelf
       - name: Build
         run: |
-          cmake -S . -B build/nightly -G Ninja -DCMAKE_BUILD_TYPE=Release -DQT=5 -DENABLE_BRIDGE=ON
+          cmake -S . -B build/nightly -G Ninja -DCMAKE_BUILD_TYPE=Release -DQT=5 -DENABLE_BRIDGE=ON -DFCEUX_STATIC_DEPENDENCIES=ON -DUSE_SYSTEM_LUA=OFF
           cmake --build build/nightly --parallel 2
       - name: Check Python SDK
         env:
@@ -36,15 +36,26 @@ jobs:
         run: |
           stage=staging/FceuxBridge-nightly-linux-x86_64
           mkdir -p "$stage/bin" dist
-          cp build/nightly/src/fceux "$stage/bin/"
-          strip "$stage/bin/fceux"
+          pipelines/bridge_linux_package.sh "$stage" build/nightly/src/fceux
           cp -a output/palettes output/luaScripts output/tools "$stage/"
           cp src/auxlib.lua "$stage/luaScripts/"
           python3 pipelines/bridge_smoke.py "$stage/bin/fceux"
           python3 pipelines/bridge_package.py "$stage"
-          ldd "$stage/bin/fceux" | tee "$stage/RUNTIME-LIBRARIES.txt"
-          ! grep -q 'not found' "$stage/RUNTIME-LIBRARIES.txt"
           tar -C staging -czf dist/FceuxBridge-nightly-linux-x86_64.tar.gz FceuxBridge-nightly-linux-x86_64
+      - name: Check package on clean Linux distributions
+        run: |
+          for image in ubuntu:22.04 fedora:44; do
+            docker run --rm -v "$PWD/staging:/packages:ro" -v "$PWD:/source:ro" "$image" sh -c '
+              set -e
+              if command -v apt-get >/dev/null; then
+                apt-get update && apt-get install -y python3 libgl1 libegl1 libgbm1 libglu1-mesa libfontconfig1 libx11-6 libxext6 libxrender1 libxcb1 libxkbcommon0 libxkbcommon-x11-0 libwayland-client0 libwayland-cursor0 libwayland-egl1 xvfb xauth libgl1-mesa-dri
+              else
+                dnf install -y python3 libstdc++ mesa-libGL mesa-libEGL mesa-libGLU fontconfig libX11 libXext libXrender libxcb libxkbcommon libxkbcommon-x11 libwayland-client libwayland-cursor libwayland-egl xorg-x11-server-Xvfb mesa-dri-drivers
+              fi
+              python3 /source/pipelines/bridge_smoke.py /packages/FceuxBridge-nightly-linux-x86_64/bin/fceux
+              xvfb-run -a python3 /source/pipelines/bridge_smoke.py /packages/FceuxBridge-nightly-linux-x86_64/bin/fceux --gui
+            '
+          done
       - uses: actions/upload-artifact@v4
         with:
           name: bridge-linux

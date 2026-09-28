@@ -11,6 +11,8 @@ savestates, Lua, and symbols.
 ```text
 bin/fceux[.exe]          Emulator with Bridge enabled
 bin/                    Windows runtime DLLs and Qt plugins
+runtime/                Bundled Linux Qt libraries and plugins
+licenses/               Linux library redistribution notices
 sdk/python/fceux_bridge/ Dependency-free Python SDK
 sdk/python/examples/    Runnable examples and regression tools
 sdk/python/tests/       SDK unit tests
@@ -24,7 +26,7 @@ COPYING                 GPL license
 ```
 
 The package includes the full emulator. It supports a headless mode but
-still uses Qt and SDL runtime libraries.
+uses bundled Qt libraries and, on Windows, bundled SDL runtime libraries.
 
 
 Download the latest experimental build from:
@@ -33,19 +35,31 @@ https://github.com/ilmenit/fceux/releases/tag/nightly-bridge
 The Windows x86_64 ZIP includes the Qt frontend and its runtime libraries.
 Extract the whole archive, then run `bin/fceux.exe`. Windows 10 or later is
 recommended. Keep the DLLs and Qt plugin folders beside the executable.
+Lua and the emulator's zlib code are compiled in. Qt, SDL2, libarchive,
+and MSVC runtime DLLs are bundled because the supplied Windows Qt/SDL
+builds use shared libraries. No separate Qt or Lua installation is needed.
 
-The Linux x86_64 tar.gz is built on Ubuntu 22.04. It requires glibc 2.35 or
-later and system Qt5, SDL2, Lua 5.1, minizip, and libarchive libraries.
-On Ubuntu 22.04 install the runtime dependencies with:
+The Linux x86_64 tar.gz is built on Ubuntu 22.04 and requires glibc 2.35
+or later. Lua is compiled into the emulator. SDL2, minizip, zlib, and
+libarchive use static libraries; Qt and remaining non-system dependencies
+are bundled in `runtime/`. Fully static Qt builds would require a separate
+Qt toolchain and static GUI plugins; the package supplies those libraries
+and plugins alongside the statically linked emulator dependencies.
 
-```sh
-sudo apt-get install libqt5widgets5 libqt5opengl5 libqt5network5 libqt5help5 libqt5qml5 libsdl2-2.0-0 liblua5.1-0 libminizip1 libarchive13
-./bin/fceux
-```
+Extract the whole archive and run `./bin/fceux`. This launcher selects the
+bundled runtime and works from any directory. Do not move `bin/` away from
+`runtime/`, and do not launch `runtime/usr/bin/fceux` directly. A normal
+Linux desktop supplies the OS C/C++ runtime, graphics drivers, fonts, and
+a Wayland or X11 display server. Native Wayland, X11, and offscreen Qt
+platform plugins are included. Qt, Lua, SDL2,
+minizip, and libarchive do not need to be installed separately.
 
-Other distributions need the equivalent packages. `RUNTIME-LIBRARIES.txt`
-records the libraries linked by the Linux build. Palettes, Lua scripts,
-and tools are included at the archive root.
+CI tests the extracted Linux package in clean Ubuntu 22.04 and Fedora 44
+containers without installing Qt, Lua, SDL2, minizip, or libarchive. Both
+headless Bridge startup and GUI startup under a virtual X server are checked.
+`LINKAGE.txt` records direct ELF dependencies; `RUNTIME-LIBRARIES.txt`
+records the resolved Linux libraries.
+Palettes, Lua scripts, and tools are included at the archive root.
 
 ## Start the Bridge
 
