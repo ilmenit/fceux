@@ -10,6 +10,10 @@
 #include "driver.h"
 #include "ppu.h"
 
+#ifdef ENABLE_BRIDGE
+#include "bridge/BridgeDebugger.h"
+#endif
+
 #include "x6502abbrev.h"
 
 #include <cstdlib>
@@ -679,6 +683,10 @@ void BreakHit(int bp_num)
 {
 	FCEUI_SetEmulationPaused(EMULATIONPAUSED_PAUSED); //mbg merge 7/19/06 changed to use EmulationPaused()
 
+#ifdef ENABLE_BRIDGE
+	FCEUXBridge::NotifyBreakHit(bp_num);
+#endif
+
 //#ifdef WIN32
 	FCEUD_DebugBreakpoint(bp_num);
 //#endif
@@ -1066,7 +1074,7 @@ bool FCEUI_TraceInstructionUnregisterHandle( void* handle )
 		{	// Match we are going to remove from list and delete
 			if (cb_prev != nullptr)
 			{
-				cb_prev = cb->next;
+				cb_prev->next = cb->next;
 			}
 			else
 			{

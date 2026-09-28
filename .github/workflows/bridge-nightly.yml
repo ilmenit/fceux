@@ -1,0 +1,171 @@
+name: FCEUX Bridge nightly
+
+on:
+  push:
+    branches: [master, FceuxBridge]
+  pull_request:
+    branches: [master, FceuxBridge]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bridge-nightly-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ninja-build qtbase5-dev qtdeclarative5-dev qttools5-dev libqt5opengl5-dev qtwayland5 libsdl2-dev libminizip-dev libarchive-dev libgl1-mesa-dev libssl-dev libxml2-dev liblzma-dev libzstd-dev liblz4-dev libbz2-dev libacl1-dev nettle-dev curl patchelf
+      - name: Build
+        run: |
+          cmake -S . -B build/nightly -G Ninja -DCMAKE_BUILD_TYPE=Release -DQT=5 -DENABLE_BRIDGE=ON -DFCEUX_STATIC_DEPENDENCIES=ON -DUSE_SYSTEM_LUA=OFF
+          cmake --build build/nightly --parallel 2
+      - name: Check Python SDK
+        env:
+          PYTHONPATH: src/bridge/sdk/python
+        run: python3 -m unittest discover -s src/bridge/sdk/python/tests
+      - name: Package
+        run: |
+          stage=staging/FceuxBridge-nightly-linux-x86_64
+          mkdir -p "$stage/bin" dist
+          pipelines/bridge_linux_package.sh "$stage" build/nightly/src/fceux
+          cp -a output/palettes output/luaScripts output/tools "$stage/"
+          cp src/auxlib.lua "$stage/luaScripts/"
+          python3 pipelines/bridge_smoke.py "$stage/bin/fceux"
+          python3 pipelines/bridge_package.py "$stage"
+          tar -C staging -czf dist/FceuxBridge-nightly-linux-x86_64.tar.gz FceuxBridge-nightly-linux-x86_64
+      - name: Check package on clean Linux distributions
+        run: |
+          for image in ubuntu:22.04 fedora:44; do
+            docker run --rm -v "$PWD/staging:/packages:ro" -v "$PWD:/source:ro" "$image" sh -c '
+              set -e
+              if command -v apt-get >/dev/null; then
+                apt-get update && apt-get install -y python3 libgl1 libegl1 libgbm1 libglu1-mesa libfontconfig1 libx11-6 libxext6 libxrender1 libxcb1 libxkbcommon0 libxkbcommon-x11-0 libwayland-client0 libwayland-cursor0 libwayland-egl1 xvfb xauth libgl1-mesa-dri
+              else
+                dnf install -y python3 libstdc++ mesa-libGL mesa-libEGL mesa-libGLU fontconfig libX11 libXext libXrender libxcb libxkbcommon libxkbcommon-x11 libwayland-client libwayland-cursor libwayland-egl xorg-x11-server-Xvfb mesa-dri-drivers
+              fi
+              python3 /source/pipelines/bridge_smoke.py /packages/FceuxBridge-nightly-linux-x86_64/bin/fceux
+              xvfb-run -a python3 /source/pipelines/bridge_smoke.py /packages/FceuxBridge-nightly-linux-x86_64/bin/fceux --gui
+            '
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bridge-linux
+          path: dist/*
+          if-no-files-found: error
+
+  windows:
+    runs-on: windows-2022
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.8.3'
+          arch: win64_msvc2022_64
+          cache: true
+      - name: Restore Windows dependency packages
+        id: vcpkg-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/AppData/Local/vcpkg/archives
+          key: windows-2022-vcpkg-${{ hashFiles('vcpkg/vcpkg.json') }}
+          restore-keys: windows-2022-vcpkg-
+      - name: Install SDL2 and libarchive
+        shell: pwsh
+        run: |
+          Invoke-WebRequest https://github.com/libsdl-org/SDL/releases/download/release-2.32.8/SDL2-devel-2.32.8-VC.zip -OutFile SDL2.zip
+          Expand-Archive SDL2.zip -DestinationPath build/deps
+          & "$env:VCPKG_INSTALLATION_ROOT/vcpkg.exe" install --triplet x64-windows --x-manifest-root=vcpkg --x-install-root=build/deps/vcpkg_installed
+          if ($LASTEXITCODE -ne 0) { throw 'vcpkg failed' }
+      - name: Save Windows dependency packages
+        if: steps.vcpkg-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ~/AppData/Local/vcpkg/archives
+          key: windows-2022-vcpkg-${{ hashFiles('vcpkg/vcpkg.json') }}
+      - name: Build
+        shell: pwsh
+        run: |
+          cmake -S . -B build/nightly -G 'Visual Studio 17 2022' -A x64 -DCMAKE_CXX_FLAGS=/MP2 -DQT=6 -DENABLE_BRIDGE=ON "-DSDL_INSTALL_PREFIX=$pwd/build/deps/SDL2-2.32.8" "-DLIBARCHIVE_INSTALL_PREFIX=$pwd/build/deps/vcpkg_installed/x64-windows"
+          if ($LASTEXITCODE -ne 0) { throw 'Configure failed' }
+          cmake --build build/nightly --config Release --parallel 2
+          if ($LASTEXITCODE -ne 0) { throw 'Build failed' }
+      - name: Check Python SDK
+        env:
+          PYTHONPATH: src/bridge/sdk/python
+        run: python -m unittest discover -s src/bridge/sdk/python/tests
+      - name: Package runtime and SDK
+        shell: pwsh
+        run: |
+          $stage = 'staging/FceuxBridge-nightly-windows-x86_64'
+          New-Item -ItemType Directory -Force "$stage/bin", dist | Out-Null
+          Copy-Item build/nightly/src/Release/fceux.exe "$stage/bin/"
+          Copy-Item build/deps/SDL2-2.32.8/lib/x64/SDL2.dll "$stage/bin/"
+          Copy-Item build/deps/vcpkg_installed/x64-windows/bin/*.dll "$stage/bin/"
+          Copy-Item output/palettes, output/luaScripts, output/tools $stage -Recurse
+          Copy-Item src/auxlib.lua "$stage/luaScripts/"
+          Copy-Item src/drivers/win/lua/x64/*.dll "$stage/bin/"
+          windeployqt --release --no-translations "$stage/bin/fceux.exe"
+          if ($LASTEXITCODE -ne 0) { throw 'Qt deployment failed' }
+          # windeployqt selects qwindows only; Bridge headless mode needs offscreen.
+          Copy-Item "$env:QT_ROOT_DIR/plugins/platforms/qoffscreen.dll" "$stage/bin/platforms/"
+          # Deploy MSVC runtime DLLs explicitly: windeployqt cannot always
+          # locate them without a Visual Studio developer environment.
+          $vswhere = "${env:ProgramFiles(x86)}/Microsoft Visual Studio/Installer/vswhere.exe"
+          $vs = & $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          $crt = Get-ChildItem "$vs/VC/Redist/MSVC/*/x64/Microsoft.VC143.CRT" -Directory | Sort-Object FullName -Descending | Select-Object -First 1
+          if (!$crt) { throw 'MSVC runtime directory not found' }
+          Copy-Item "$($crt.FullName)/*.dll" "$stage/bin/"
+          python pipelines/bridge_smoke.py "$stage/bin/fceux.exe"
+          if ($LASTEXITCODE -ne 0) { throw 'Bridge smoke failed' }
+          python pipelines/bridge_smoke.py "$stage/bin/fceux.exe" --gui --platform windows
+          if ($LASTEXITCODE -ne 0) { throw 'Bridge GUI smoke failed' }
+          python pipelines/bridge_package.py $stage
+          if ($LASTEXITCODE -ne 0) { throw 'SDK packaging failed' }
+          Compress-Archive $stage dist/FceuxBridge-nightly-windows-x86_64.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bridge-windows
+          path: dist/*
+          if-no-files-found: error
+
+  publish:
+    needs: [linux, windows]
+    if: github.repository == 'ilmenit/fceux' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/FceuxBridge') && github.event_name != 'pull_request'
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: bridge-*
+          path: dist
+          merge-multiple: true
+      - name: Update rolling release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          cd dist
+          sha256sum *.zip *.tar.gz > SHA256SUMS.txt
+          gh api --method PATCH "repos/$GH_REPO/git/refs/tags/nightly-bridge" -f sha="$GITHUB_SHA" -F force=true \
+            || gh api --method POST "repos/$GH_REPO/git/refs" -f ref=refs/tags/nightly-bridge -f sha="$GITHUB_SHA"
+          cat > /tmp/bridge-release.md <<EOF_NOTES
+          Rolling FCEUX Bridge build from \`$GITHUB_REF_NAME\`, commit \`$GITHUB_SHA\`.
+
+          Download the Windows x86_64 ZIP or Linux x86_64 tar.gz. Each includes the Qt emulator with Bridge enabled, Python SDK, examples, and documentation. Extract and read README.md for runtime requirements and usage. These are experimental prerelease builds.
+          EOF_NOTES
+          if ! gh release view nightly-bridge >/dev/null 2>&1; then
+            gh release create nightly-bridge --prerelease --title 'FCEUX Bridge nightly' --notes-file /tmp/bridge-release.md
+          fi
+          gh release upload nightly-bridge ./*.zip ./*.tar.gz SHA256SUMS.txt --clobber
+          gh release edit nightly-bridge --prerelease --title 'FCEUX Bridge nightly' --notes-file /tmp/bridge-release.md

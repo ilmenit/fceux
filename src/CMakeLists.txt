@@ -5,6 +5,16 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
+option(FCEUX_STATIC_DEPENDENCIES "Prefer static non-Qt libraries for portable Linux packages" OFF)
+option(USE_SYSTEM_LUA "Use system Lua 5.1 instead of the bundled implementation" ON)
+
+option(ENABLE_BRIDGE "Enable local automation bridge for external tools" ON)
+
+if (${ENABLE_BRIDGE})
+	message( STATUS "FCEUX Bridge Enabled")
+	add_definitions( -DENABLE_BRIDGE )
+endif()
+
 if (${PUBLIC_RELEASE})
 	add_definitions( -DPUBLIC_RELEASE=1 )
 endif()
@@ -166,6 +176,9 @@ else(WIN32)
   # Use package PkgConfig to detect headers/library what find_package cannot find.
   find_package(PkgConfig REQUIRED)
   find_package(OpenGL REQUIRED)
+  if(FCEUX_STATIC_DEPENDENCIES)
+    set(ZLIB_USE_STATIC_LIBS ON)
+  endif()
   find_package(ZLIB REQUIRED)
 
   add_definitions( -Wall  -Wno-write-strings  -Wno-parentheses  -Wno-unused-local-typedefs  -fPIC )
@@ -265,7 +278,28 @@ else(WIN32)
   endif()
 
   # Check for LUA
-  pkg_search_module( LUA lua5.1 lua-5.1 )
+  if(USE_SYSTEM_LUA AND NOT FCEUX_STATIC_DEPENDENCIES)
+    pkg_search_module( LUA lua5.1 lua-5.1 )
+  else()
+    set(LUA_FOUND FALSE)
+    set(LUA_LDFLAGS "")
+  endif()
+
+  if(FCEUX_STATIC_DEPENDENCIES)
+    include(${CMAKE_SOURCE_DIR}/cmake/PreferStaticDependencies.cmake)
+    fceux_static_pkg_libraries(SDL2 SDL2_LDFLAGS)
+    fceux_static_pkg_libraries(MINIZIP MINIZIP_LDFLAGS)
+    if(LIBARCHIVE_FOUND)
+      fceux_static_pkg_libraries(LIBARCHIVE LIBARCHIVE_LDFLAGS)
+    endif()
+    # Compression/crypto archives can depend on each other; rescan the group.
+    set(PORTABLE_LDFLAGS -Wl,--start-group ${SDL2_LDFLAGS}
+      ${MINIZIP_LDFLAGS} ${ZLIB_LIBRARIES} ${LIBARCHIVE_LDFLAGS} -Wl,--end-group)
+    set(SDL2_LDFLAGS "")
+    set(MINIZIP_LDFLAGS "")
+    set(ZLIB_LIBRARIES "")
+    set(LIBARCHIVE_LDFLAGS "")
+  endif()
 
   add_definitions( -DHAVE_ASPRINTF ) # What system wouldn't have this?
   add_definitions( -DLUA_USE_LINUX ) # This needs to be set when link LUA internally for linux and macosx
@@ -698,6 +732,30 @@ set(SRC_DRIVERS_SDL
   ${CMAKE_CURRENT_SOURCE_DIR}/drivers/Qt/TasEditor/markers.cpp
 )
 
+if (${ENABLE_BRIDGE})
+  list(APPEND SRC_DRIVERS_SDL
+    ${CMAKE_CURRENT_SOURCE_DIR}/bridge/BridgeApu.cpp
+			${CMAKE_CURRENT_SOURCE_DIR}/bridge/BridgeCart.cpp
+			${CMAKE_CURRENT_SOURCE_DIR}/bridge/BridgeCdLog.cpp
+			${CMAKE_CURRENT_SOURCE_DIR}/bridge/BridgeCpu.cpp
+			${CMAKE_CURRENT_SOURCE_DIR}/bridge/BridgeDebugger.cpp
+			${CMAKE_CURRENT_SOURCE_DIR}/bridge/BridgeExecution.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/bridge/BridgeInput.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/bridge/BridgeHistory.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/bridge/BridgeJson.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/bridge/BridgeLifecycle.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/bridge/BridgeLua.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/bridge/BridgeMemory.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/bridge/BridgeProtocol.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/bridge/BridgePpu.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/bridge/BridgeScheduler.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/bridge/BridgeScreen.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/bridge/BridgeServer.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/bridge/BridgeStateStore.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/bridge/BridgeSymbols.cpp
+  )
+endif()
+
 set(SOURCES ${SRC_CORE} ${SRC_DRIVERS_COMMON} ${SRC_DRIVERS_SDL})
 
 # Put build timestamp into BUILD_TS environment variable and from there into
@@ -740,7 +798,7 @@ add_executable(  ${APP_NAME}  ${SOURCES} ../resources.qrc
 endif()
 
 target_link_libraries( ${APP_NAME}
-   ${ASAN_LDFLAGS}  ${GPROF_LDFLAGS}
+   ${ASAN_LDFLAGS}  ${GPROF_LDFLAGS} ${PORTABLE_LDFLAGS}
    ${${Qt}Widgets_LIBRARIES}
    ${${Qt}Help_LIBRARIES}
    ${${Qt}Qml_LIBRARIES}

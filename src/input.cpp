@@ -26,6 +26,9 @@
 #include "sound.h"
 #include "netplay.h"
 #include "movie.h"
+#ifdef ENABLE_BRIDGE
+#include "bridge/BridgeInput.h"
+#endif
 #include "state.h"
 #include "input/zapper.h"
 #ifdef _S9XLUA_H
@@ -256,6 +259,10 @@ static void UpdateGP(int w, void *data, int arg)
 		joy[0]= FCEU_JSReadJoypad(0,joy[0]);
 		joy[2]= FCEU_JSReadJoypad(2,joy[2]);
 		#endif
+		#ifdef ENABLE_BRIDGE
+		joy[0]= FCEUXBridge::ApplyJoypad(0, joy[0]);
+		joy[2]= FCEUXBridge::ApplyJoypad(2, joy[2]);
+		#endif
 	}
 	else
 	{
@@ -272,6 +279,10 @@ static void UpdateGP(int w, void *data, int arg)
 		#ifdef __FCEU_QSCRIPT_ENABLE__
 		joy[1]= FCEU_JSReadJoypad(1,joy[1]);
 		joy[3]= FCEU_JSReadJoypad(3,joy[3]);
+		#endif
+		#ifdef ENABLE_BRIDGE
+		joy[1]= FCEUXBridge::ApplyJoypad(1, joy[1]);
+		joy[3]= FCEUXBridge::ApplyJoypad(3, joy[3]);
 		#endif
 	}
 }

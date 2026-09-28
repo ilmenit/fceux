@@ -130,7 +130,8 @@ class debugSymbolTable_t
 		debugSymbolTable_t(void);
 		~debugSymbolTable_t(void);
 
-		int loadFileNL( int addr );
+		int loadFileNL( int bank );
+		int loadFileNL( int bank, const char *filePath );
 		int loadRegisterMap(void);
 		int loadGameSymbols(void);
 		int numPages(void){ return pageMap.size(); }

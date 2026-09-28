@@ -463,30 +463,45 @@ int generateNLFilenameForAddress(int address, std::string &NLfilename)
 //--------------------------------------------------------------
 int debugSymbolTable_t::loadFileNL( int bank )
 {
-	FILE *fp;
-	int i, j, ofs, lineNum = 0, literal = 0, array = 0;
 	std::string fileName;
-	char stmp[512], line[512];
-	debugSymbolPage_t *page = nullptr;
-	debugSymbol_t *sym = nullptr;
-	FCEU::autoScopedLock alock(cs);
-
-	//printf("Looking to Load Debug Bank: $%X \n", bank );
 
 	if ( generateNLFilenameForBank( bank, fileName ) )
 	{
 		return -1;
 	}
-	//printf("Loading NL File: %s\n", fileName.c_str() );
+	return loadFileNL( bank, fileName.c_str() );
+}
+//--------------------------------------------------------------
+int debugSymbolTable_t::loadFileNL( int bank, const char *filePath )
+{
+	FILE *fp;
+	int i, j, ofs, lineNum = 0, literal = 0, array = 0;
+	char stmp[512], line[512];
+	debugSymbolPage_t *page = nullptr;
+	debugSymbol_t *sym = nullptr;
+	FCEU::autoScopedLock alock(cs);
 
-	fp = ::fopen( fileName.c_str(), "r" );
+	if ( filePath == nullptr )
+	{
+		return -1;
+	}
+	//printf("Loading NL File: %s\n", filePath );
+
+	fp = ::fopen( filePath, "r" );
 
 	if ( fp == nullptr )
 	{
+		snprintf( dbgSymTblErrMsg, sizeof(dbgSymTblErrMsg), "Error: Could not open NL file '%s' for reading.\n", filePath );
 		return -1;
 	}
 	page = new debugSymbolPage_t(bank);
 
+	auto existingPage = pageMap.find( page->pageNum() );
+	if ( existingPage != pageMap.end() )
+	{
+		delete existingPage->second;
+		pageMap.erase( existingPage );
+	}
 	pageMap[ page->pageNum() ] = page;
 
 	while ( fgets( line, sizeof(line), fp ) != 0 )
@@ -534,7 +549,7 @@ int debugSymbolTable_t::loadFileNL( int bank )
 			j=0; i++;
 			if ( !isxdigit( line[i] ) )
 			{
-				FCEU_printf("Error: Invalid Offset on Line %i of File %s\n", lineNum, fileName.c_str() );
+				FCEU_printf("Error: Invalid Offset on Line %i of File %s\n", lineNum, filePath );
 			}
 			while ( isxdigit( line[i] ) )
 			{
@@ -558,7 +573,7 @@ int debugSymbolTable_t::loadFileNL( int bank )
 
 			if ( line[i] != '#' )
 			{
-				FCEU_printf("Error: Missing field delimiter following offset $%X on Line %i of File %s\n", ofs, lineNum, fileName.c_str() );
+				FCEU_printf("Error: Missing field delimiter following offset $%X on Line %i of File %s\n", ofs, lineNum, filePath );
 				continue;
 			}
 			i++;
@@ -623,7 +638,7 @@ int debugSymbolTable_t::loadFileNL( int bank )
 
 			if ( line[i] != '#' )
 			{
-				FCEU_printf("Error: Missing field delimiter following name '%s' on Line %i of File %s\n", stmp, lineNum, fileName.c_str() );
+				FCEU_printf("Error: Missing field delimiter following name '%s' on Line %i of File %s\n", stmp, lineNum, filePath );
 				continue;
 			}
 			i++;
@@ -632,7 +647,7 @@ int debugSymbolTable_t::loadFileNL( int bank )
 
 			if ( sym == nullptr )
 			{
-				FCEU_printf("Error: Failed to allocate memory for offset $%04X Name '%s' on Line %i of File %s\n", ofs, stmp, lineNum, fileName.c_str() );
+				FCEU_printf("Error: Failed to allocate memory for offset $%04X Name '%s' on Line %i of File %s\n", ofs, stmp, lineNum, filePath );
 				continue;
 			}
 			sym->ofs = ofs;
@@ -682,7 +697,7 @@ int debugSymbolTable_t::loadFileNL( int bank )
 
 						if ( page->addSymbol( arraySym ) )
 						{
-							FCEU_printf("Error: Failed to add symbol for offset $%04X Name '%s' on Line %i of File %s\n", ofs, arraySym->name().c_str(), lineNum, fileName.c_str() );
+							FCEU_printf("Error: Failed to add symbol for offset $%04X Name '%s' on Line %i of File %s\n", ofs, arraySym->name().c_str(), lineNum, filePath );
 							FCEU_printf("%s\n", errorMessage() );
 							delete arraySym; arraySym = nullptr; // Failed to add symbol
 						}
@@ -694,7 +709,7 @@ int debugSymbolTable_t::loadFileNL( int bank )
 			{
 				if ( page->addSymbol( sym ) )
 				{
-					FCEU_printf("Error: Failed to add symbol for offset $%04X Name '%s' on Line %i of File %s\n", ofs, sym->name().c_str(), lineNum, fileName.c_str() );
+					FCEU_printf("Error: Failed to add symbol for offset $%04X Name '%s' on Line %i of File %s\n", ofs, sym->name().c_str(), lineNum, filePath );
 					FCEU_printf("%s\n", errorMessage() );
 					delete sym; sym = nullptr; // Failed to add symbol
 				}

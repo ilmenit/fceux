@@ -6470,7 +6470,458 @@ static const struct luaL_reg cdloglib[] = {
 	{ NULL,NULL }
 };
 
-void CallExitFunction() 
+static bool FCEU_LuaEnsureState(const char* arg)
+{
+	if (!DemandLua())
+	{
+		return false;
+	}
+	if (L)
+	{
+		return true;
+	}
+
+	L = lua_open();
+	luaL_openlibs(L);
+#if defined( __WIN_DRIVER__) && !defined(NEED_MINGW_HACKS)
+	iuplua_open(L);
+	iupcontrolslua_open(L);
+	luaopen_winapi(L);
+	imlua_open(L);
+	cdlua_open(L);
+	cdluaim_open(L);
+
+	lua_pushcfunction(L,luaopen_socket_core);
+	lua_setglobal(L,"tmp");
+	luaL_dostring(L, "package.preload[\"socket.core\"] = _G.tmp");
+	lua_pushcfunction(L,luaopen_mime_core);
+	lua_setglobal(L,"tmp");
+	luaL_dostring(L, "package.preload[\"mime.core\"] = _G.tmp");
+#endif
+
+	luaL_register(L, "emu", emulib);
+	luaL_register(L, "FCEU", emulib);
+	luaL_register(L, "memory", memorylib);
+	luaL_register(L, "ppu", ppulib);
+	luaL_register(L, "rom", romlib);
+	luaL_register(L, "joypad", joypadlib);
+	luaL_register(L, "zapper", zapperlib);
+	luaL_register(L, "input", inputlib);
+	lua_settop(L, 0);
+	luaL_register(L, "savestate", savestatelib);
+	luaL_register(L, "movie", movielib);
+	luaL_register(L, "gui", guilib);
+	luaL_register(L, "sound", soundlib);
+	luaL_register(L, "debugger", debuggerlib);
+	luaL_register(L, "cdlog", cdloglib);
+	luaL_register(L, "taseditor", taseditorlib);
+	luaL_register(L, "bit", bit_funcs);
+	lua_settop(L, 0);
+
+	lua_register(L, "print", print);
+	lua_register(L, "gethash", gethash),
+	lua_register(L, "tostring", tostring);
+	lua_register(L, "tobitstring", tobitstring);
+	lua_register(L, "addressof", addressof);
+	lua_register(L, "copytable", copytable);
+
+	lua_register(L, "AND", bit_band);
+	lua_register(L, "OR", bit_bor);
+	lua_register(L, "XOR", bit_bxor);
+	lua_register(L, "SHIFT", bit_bshift_emulua);
+	lua_register(L, "BIT", bitbit);
+
+	if (arg)
+	{
+		luaL_Buffer b;
+		luaL_buffinit(L, &b);
+		luaL_addstring(&b, arg);
+		luaL_pushresult(&b);
+		lua_setglobal(L, "arg");
+	}
+
+	luabitop_validate(L);
+
+	for(int i = 0; i < LUAMEMHOOK_COUNT; i++)
+	{
+		lua_newtable(L);
+		lua_setfield(L, LUA_REGISTRYINDEX, luaMemHookTypeStrings[i]);
+	}
+
+	X6502_MemHook::Add( X6502_MemHook::Read , luaReadMemHook , nullptr );
+	X6502_MemHook::Add( X6502_MemHook::Write, luaWriteMemHook, nullptr );
+	X6502_MemHook::Add( X6502_MemHook::Exec , luaExecMemHook , nullptr );
+
+	return true;
+}
+
+static std::string bridgePrintOutput;
+
+static std::string bridgeJsonEscape(const char* text)
+{
+	std::string out;
+	if (text == nullptr)
+	{
+		return out;
+	}
+	for (const unsigned char* p = reinterpret_cast<const unsigned char*>(text); *p; p++)
+	{
+		switch (*p)
+		{
+			case '"': out += "\\\""; break;
+			case '\\': out += "\\\\"; break;
+			case '\b': out += "\\b"; break;
+			case '\f': out += "\\f"; break;
+			case '\n': out += "\\n"; break;
+			case '\r': out += "\\r"; break;
+			case '\t': out += "\\t"; break;
+			default:
+				if (*p < 0x20)
+				{
+					char escaped[8];
+					snprintf(escaped, sizeof(escaped), "\\u%04x", *p);
+					out += escaped;
+				}
+				else
+				{
+					out += static_cast<char>(*p);
+				}
+				break;
+		}
+	}
+	return out;
+}
+
+static std::string bridgeJsonString(const char* text)
+{
+	return std::string("\"") + bridgeJsonEscape(text) + "\"";
+}
+
+static std::string bridgeLuaToJson(lua_State* state, int index, int depth);
+
+static int bridgeLuaAbsIndex(lua_State* state, int index)
+{
+	if (index > 0 || index <= LUA_REGISTRYINDEX)
+	{
+		return index;
+	}
+	return lua_gettop(state) + index + 1;
+}
+
+static std::string bridgeLuaKeyToJsonKey(lua_State* state, int index)
+{
+	const int type = lua_type(state, index);
+	if (type == LUA_TSTRING)
+	{
+		return lua_tostring(state, index);
+	}
+	if (type == LUA_TNUMBER)
+	{
+		char key[64];
+		snprintf(key, sizeof(key), "%.14g", lua_tonumber(state, index));
+		return key;
+	}
+	if (type == LUA_TBOOLEAN)
+	{
+		return lua_toboolean(state, index) ? "true" : "false";
+	}
+	return lua_typename(state, type);
+}
+
+static bool bridgeLuaTableIsArray(lua_State* state, int index, int* length)
+{
+	const int absolute = bridgeLuaAbsIndex(state, index);
+	int maxIndex = 0;
+	int count = 0;
+	bool array = true;
+	lua_pushnil(state);
+	while (lua_next(state, absolute) != 0)
+	{
+		if (lua_type(state, -2) != LUA_TNUMBER)
+		{
+			array = false;
+		}
+		else
+		{
+			const lua_Number keyNumber = lua_tonumber(state, -2);
+			const int key = static_cast<int>(keyNumber);
+			if (key < 1 || static_cast<lua_Number>(key) != keyNumber)
+			{
+				array = false;
+			}
+			else if (key > maxIndex)
+			{
+				maxIndex = key;
+			}
+		}
+		count++;
+		lua_pop(state, 1);
+	}
+	array = array && count == maxIndex;
+	*length = array ? maxIndex : count;
+	return array;
+}
+
+static std::string bridgeLuaTableToJson(lua_State* state, int index, int depth)
+{
+	if (depth <= 0)
+	{
+		return bridgeJsonString("<max depth>");
+	}
+
+	const int absolute = bridgeLuaAbsIndex(state, index);
+	int length = 0;
+	if (bridgeLuaTableIsArray(state, absolute, &length))
+	{
+		std::string out = "[";
+		for (int i = 1; i <= length; i++)
+		{
+			if (i > 1)
+			{
+				out += ",";
+			}
+			lua_rawgeti(state, absolute, i);
+			out += bridgeLuaToJson(state, -1, depth - 1);
+			lua_pop(state, 1);
+		}
+		out += "]";
+		return out;
+	}
+
+	std::string out = "{";
+	bool first = true;
+	lua_pushnil(state);
+	while (lua_next(state, absolute) != 0)
+	{
+		if (!first)
+		{
+			out += ",";
+		}
+		first = false;
+		const std::string key = bridgeLuaKeyToJsonKey(state, -2);
+		out += bridgeJsonString(key.c_str());
+		out += ":";
+		out += bridgeLuaToJson(state, -1, depth - 1);
+		lua_pop(state, 1);
+	}
+	out += "}";
+	return out;
+}
+
+static std::string bridgeLuaToJson(lua_State* state, int index, int depth)
+{
+	switch (lua_type(state, index))
+	{
+		case LUA_TNIL:
+			return "null";
+		case LUA_TBOOLEAN:
+			return lua_toboolean(state, index) ? "true" : "false";
+		case LUA_TNUMBER:
+		{
+			char number[64];
+			snprintf(number, sizeof(number), "%.14g", lua_tonumber(state, index));
+			return number;
+		}
+		case LUA_TSTRING:
+			return bridgeJsonString(lua_tostring(state, index));
+		case LUA_TTABLE:
+			return bridgeLuaTableToJson(state, index, depth);
+		default:
+			return bridgeJsonString(lua_typename(state, lua_type(state, index)));
+	}
+}
+
+static int bridgeLuaPrint(lua_State* state)
+{
+	const int count = lua_gettop(state);
+	for (int i = 1; i <= count; i++)
+	{
+		if (i > 1)
+		{
+			bridgePrintOutput += "\t";
+		}
+		lua_getglobal(state, "tostring");
+		lua_pushvalue(state, i);
+		if (lua_pcall(state, 1, 1, 0) == 0)
+		{
+			const char* text = lua_tostring(state, -1);
+			bridgePrintOutput += text ? text : "";
+		}
+		else
+		{
+			bridgePrintOutput += "<tostring failed>";
+		}
+		lua_pop(state, 1);
+	}
+	bridgePrintOutput += "\n";
+	return 0;
+}
+
+static int bridgeLuaTraceback(lua_State* state)
+{
+	const char* message = lua_tostring(state, 1);
+	if (message == nullptr)
+	{
+		if (luaL_callmeta(state, 1, "__tostring") && lua_type(state, -1) == LUA_TSTRING)
+		{
+			return 1;
+		}
+		message = lua_pushfstring(state, "(error object is a %s value)", luaL_typename(state, 1));
+	}
+	lua_getglobal(state, "debug");
+	if (lua_istable(state, -1))
+	{
+		lua_getfield(state, -1, "traceback");
+		if (lua_isfunction(state, -1))
+		{
+			lua_pushstring(state, message);
+			lua_pushinteger(state, 2);
+			if (lua_pcall(state, 2, 1, 0) == 0)
+			{
+				return 1;
+			}
+		}
+	}
+	lua_settop(state, 1);
+	return 1;
+}
+
+int FCEU_LuaBridgeEvalJson(const char* code, unsigned int codeSize, char* resultJson, unsigned int resultJsonSize, char* output, unsigned int outputSize, char* error, unsigned int errorSize, char* traceback, unsigned int tracebackSize)
+{
+	if (!FCEU_LuaEnsureState(nullptr))
+	{
+		snprintf(error, errorSize, "failed to initialize Lua");
+		return 0;
+	}
+
+	bridgePrintOutput.clear();
+	const int base = lua_gettop(L);
+	lua_getglobal(L, "print");
+	const int originalPrintIndex = lua_gettop(L);
+	lua_pushcfunction(L, bridgeLuaPrint);
+	lua_setglobal(L, "print");
+	lua_pushcfunction(L, bridgeLuaTraceback);
+	const int tracebackIndex = lua_gettop(L);
+
+	const char* source = code ? code : "";
+	const unsigned int sourceSize = code ? codeSize : 0;
+	const int loadResult = luaL_loadbuffer(L, source, sourceSize, "bridge");
+	if (loadResult != 0)
+	{
+		snprintf(error, errorSize, "%s", lua_tostring(L, -1));
+		snprintf(traceback, tracebackSize, "%s", lua_tostring(L, -1));
+		snprintf(output, outputSize, "%s", bridgePrintOutput.c_str());
+		lua_settop(L, originalPrintIndex);
+		lua_setglobal(L, "print");
+		lua_settop(L, base);
+		return 0;
+	}
+
+	const int callResult = lua_pcall(L, 0, LUA_MULTRET, tracebackIndex);
+	if (callResult != 0)
+	{
+		snprintf(error, errorSize, "%s", lua_tostring(L, -1));
+		snprintf(traceback, tracebackSize, "%s", lua_tostring(L, -1));
+		snprintf(output, outputSize, "%s", bridgePrintOutput.c_str());
+		lua_settop(L, originalPrintIndex);
+		lua_setglobal(L, "print");
+		lua_settop(L, base);
+		return 0;
+	}
+
+	const int firstResult = tracebackIndex + 1;
+	const int results = lua_gettop(L) - tracebackIndex;
+	std::string json;
+	if (results == 0)
+	{
+		json = "null";
+	}
+	else if (results == 1)
+	{
+		json = bridgeLuaToJson(L, firstResult, 8);
+	}
+	else
+	{
+		json = "[";
+		for (int i = 0; i < results; i++)
+		{
+			if (i > 0)
+			{
+				json += ",";
+			}
+			json += bridgeLuaToJson(L, firstResult + i, 8);
+		}
+		json += "]";
+	}
+
+	snprintf(resultJson, resultJsonSize, "%s", json.c_str());
+	snprintf(output, outputSize, "%s", bridgePrintOutput.c_str());
+	lua_settop(L, originalPrintIndex);
+	lua_setglobal(L, "print");
+	lua_settop(L, base);
+	return 1;
+}
+
+int FCEU_LuaBridgeEvalLen(const char* code, unsigned int codeSize, char* output, unsigned int outputSize, char* error, unsigned int errorSize)
+{
+	if (!FCEU_LuaEnsureState(nullptr))
+	{
+		snprintf(error, errorSize, "failed to initialize Lua");
+		return 0;
+	}
+
+	const int base = lua_gettop(L);
+	const char* source = code ? code : "";
+	const unsigned int sourceSize = code ? codeSize : 0;
+	const int loadResult = luaL_loadbuffer(L, source, sourceSize, "bridge");
+	if (loadResult != 0)
+	{
+		snprintf(error, errorSize, "%s", lua_tostring(L, -1));
+		lua_settop(L, base);
+		return 0;
+	}
+
+	const int callResult = lua_pcall(L, 0, LUA_MULTRET, 0);
+	if (callResult != 0)
+	{
+		snprintf(error, errorSize, "%s", lua_tostring(L, -1));
+		lua_settop(L, base);
+		return 0;
+	}
+
+	const int results = lua_gettop(L) - base;
+	std::string joined;
+	for (int i = 1; i <= results; i++)
+	{
+		if (i > 1)
+		{
+			joined += "\n";
+		}
+		lua_getglobal(L, "tostring");
+		lua_pushvalue(L, base + i);
+		if (lua_pcall(L, 1, 1, 0) == 0)
+		{
+			const char* text = lua_tostring(L, -1);
+			joined += text ? text : "";
+		}
+		else
+		{
+			joined += "<tostring failed>";
+		}
+		lua_pop(L, 1);
+	}
+
+	snprintf(output, outputSize, "%s", joined.c_str());
+	lua_settop(L, base);
+	return 1;
+}
+
+int FCEU_LuaBridgeEval(const char* code, char* output, unsigned int outputSize, char* error, unsigned int errorSize)
+{
+	return FCEU_LuaBridgeEvalLen(code, code ? static_cast<unsigned int>(strlen(code)) : 0, output, outputSize, error, errorSize);
+}
+
+void CallExitFunction()
 {
 	if (!L)
 		return;
@@ -6608,84 +7059,7 @@ int FCEU_LoadLuaCode(const char *filename, const char *arg)
 	luaexiterrorcount = 8;
 	luaCallbackErrorCounter = 0;
 
-	if (!L) {
-
-		L = lua_open();
-		luaL_openlibs(L);
-		#if defined( __WIN_DRIVER__) && !defined(NEED_MINGW_HACKS)
-		iuplua_open(L);
-		iupcontrolslua_open(L);
-		luaopen_winapi(L);
-		imlua_open(L);
-		cdlua_open(L);
-		cdluaim_open(L);
-
-		//luasocket - yeah, have to open this in a weird way
-		lua_pushcfunction(L,luaopen_socket_core);
-		lua_setglobal(L,"tmp");
-		luaL_dostring(L, "package.preload[\"socket.core\"] = _G.tmp");
-		lua_pushcfunction(L,luaopen_mime_core);
-		lua_setglobal(L,"tmp");
-		luaL_dostring(L, "package.preload[\"mime.core\"] = _G.tmp");
-		#endif
-
-		luaL_register(L, "emu", emulib); // added for better cross-emulator compatibility
-		luaL_register(L, "FCEU", emulib); // kept for backward compatibility
-		luaL_register(L, "memory", memorylib);
-		luaL_register(L, "ppu", ppulib);
-		luaL_register(L, "rom", romlib);
-		luaL_register(L, "joypad", joypadlib);
-		luaL_register(L, "zapper", zapperlib);
-		luaL_register(L, "input", inputlib);
-		lua_settop(L, 0); // clean the stack, because each call to luaL_register leaves a table on top (eventually overflows)
-		luaL_register(L, "savestate", savestatelib);
-		luaL_register(L, "movie", movielib);
-		luaL_register(L, "gui", guilib);
-		luaL_register(L, "sound", soundlib);
-		luaL_register(L, "debugger", debuggerlib);
-		luaL_register(L, "cdlog", cdloglib);
-		luaL_register(L, "taseditor", taseditorlib);
-		luaL_register(L, "bit", bit_funcs); // LuaBitOp library
-		lua_settop(L, 0);
-
-		// register a few utility functions outside of libraries (in the global namespace)
-		lua_register(L, "print", print);
-		lua_register(L, "gethash", gethash),
-		lua_register(L, "tostring", tostring);
-		lua_register(L, "tobitstring", tobitstring);
-		lua_register(L, "addressof", addressof);
-		lua_register(L, "copytable", copytable);
-
-		// old bit operation functions
-		lua_register(L, "AND", bit_band);
-		lua_register(L, "OR", bit_bor);
-		lua_register(L, "XOR", bit_bxor);
-		lua_register(L, "SHIFT", bit_bshift_emulua);
-		lua_register(L, "BIT", bitbit);
-
-		if (arg)
-		{
-			luaL_Buffer b;
-			luaL_buffinit(L, &b);
-			luaL_addstring(&b, arg);
-			luaL_pushresult(&b);
-
-			lua_setglobal(L, "arg");
-		}
-
-		luabitop_validate(L);
-
-		// push arrays for storing hook functions in
-		for(int i = 0; i < LUAMEMHOOK_COUNT; i++)
-		{
-			lua_newtable(L);
-			lua_setfield(L, LUA_REGISTRYINDEX, luaMemHookTypeStrings[i]);
-		}
-
-		X6502_MemHook::Add( X6502_MemHook::Read , luaReadMemHook , nullptr );
-		X6502_MemHook::Add( X6502_MemHook::Write, luaWriteMemHook, nullptr );
-		X6502_MemHook::Add( X6502_MemHook::Exec , luaExecMemHook , nullptr );
-	}
+	FCEU_LuaEnsureState(arg);
 
 	// We make our thread NOW because we want it at the bottom of the stack.
 	// If all goes wrong, we let the garbage collector remove it.
