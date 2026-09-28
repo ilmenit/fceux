@@ -125,14 +125,14 @@ src/bridge/
 Python SDK:
 
 ```text
-bridge_sdk/python/fceux_bridge/
+src/bridge/sdk/python/fceux_bridge/
   __init__.py
   client.py
   project.py
   loader.py
   analyzer.py
   asm_writer.py
-examples/bridge/
+src/bridge/sdk/python/examples/
   01_ping.py
   02_history.py
   03_memory_domains.py
@@ -147,7 +147,7 @@ examples/bridge/
 Documentation:
 
 ```text
-documentation/bridge/
+src/bridge/docs/
   PROTOCOL.md
   COMMANDS.md
   PYTHON_SDK.md
@@ -730,15 +730,15 @@ Integration tests:
 
 Implemented smoke coverage:
 
-- `PYTHONPATH=bridge_sdk/python python -m unittest discover -s bridge_sdk/python/tests` validates dependency-free Python SDK behavior for command quoting, token-file validation, stdio-style command writes, structured errors, close callbacks, `MEMSEARCH` pattern formatting, `REG_SET`, history/frame/run/step/disassembly/callstack command construction, breakpoint/watchpoint command construction, symbol/Lua command construction, state save/load command construction, deep-introspection base64 response decoding, joypad helper cleanup, and `APP_EXIT` command construction.
-- `python examples/bridge/18_runtime_smoke.py --fceux /path/to/fceux --bridge-headless --bridge=stdio --sdl-dummy` generates a tiny NROM counter ROM and validates bridge connection, bad-token auth failure, command tokenizer errors, decimal/`0x`/`$` numeric parsing, quoted option parsing, loaded-game status, idle `WAIT`, trace start/stop/status aliases, deterministic frame gate completion, register shape, decoded CPU RAM dump, inline and file-backed state save/load round-trips, CPU/ROM/PPU `MEMSEARCH`, execution history entries and enable/disable behavior, rawscreen metadata, cart mapper/PRG/CHR metadata, `$8000` bank mapping, CPU/PPU memory-map rows, PRG/CHR `ROM_PEEK` and `ROM_DUMP`, CD log start/dump/stop buffers, direct PPU nametable/OAM/palette dump shapes, `SCREENSHOT path=...` PNG writing, and launched-process shutdown through `APP_EXIT`. This path has been run successfully in the restricted sandbox where TCP/Unix socket binds are unavailable.
+- `PYTHONPATH=src/bridge/sdk/python python -m unittest discover -s src/bridge/sdk/python/tests` validates dependency-free Python SDK behavior for command quoting, token-file validation, stdio-style command writes, structured errors, close callbacks, `MEMSEARCH` pattern formatting, `REG_SET`, history/frame/run/step/disassembly/callstack command construction, breakpoint/watchpoint command construction, symbol/Lua command construction, state save/load command construction, deep-introspection base64 response decoding, joypad helper cleanup, and `APP_EXIT` command construction.
+- `python src/bridge/sdk/python/examples/18_runtime_smoke.py --fceux /path/to/fceux --bridge-headless --bridge=stdio --sdl-dummy` generates a tiny NROM counter ROM and validates bridge connection, bad-token auth failure, command tokenizer errors, decimal/`0x`/`$` numeric parsing, quoted option parsing, loaded-game status, idle `WAIT`, trace start/stop/status aliases, deterministic frame gate completion, register shape, decoded CPU RAM dump, inline and file-backed state save/load round-trips, CPU/ROM/PPU `MEMSEARCH`, execution history entries and enable/disable behavior, rawscreen metadata, cart mapper/PRG/CHR metadata, `$8000` bank mapping, CPU/PPU memory-map rows, PRG/CHR `ROM_PEEK` and `ROM_DUMP`, CD log start/dump/stop buffers, direct PPU nametable/OAM/palette dump shapes, `SCREENSHOT path=...` PNG writing, and launched-process shutdown through `APP_EXIT`. This path has been run successfully in the restricted sandbox where TCP/Unix socket binds are unavailable.
 - The smoke runner's main launched process exercises `--bridge=stdio`; the bad-token auth child process exercises the split `--bridge stdio` form, covering two bridge pre-parser command-line spellings in the same run.
 - The generated ROM path, state path, screenshot path, and symbol sidecar paths intentionally include spaces, so the smoke path exercises SDK quoting and bridge command tokenization for host paths.
 - The runtime smoke also verifies that `FRAME 0`, malformed quoted commands, dangling escapes, and invalid `REG_SET` requests return structured protocol errors and leave the bridge session usable.
-- `python examples/bridge/18_runtime_smoke.py --mode all --fceux /path/to/fceux --bridge-headless --bridge=stdio --sdl-dummy` additionally validates execute breakpoint setup, CPU write watchpoint setup, `REG_SET`, `RUN_UNTIL break`, structured run-until timeout, break-status correlation by bridge breakpoint/watchpoint id, disassembly/history around the hit, single-step response shape, `STEP_OVER` on a generated `JSR`, `STEP_OUT` from a generated subroutine with explicit stack setup, Lua print capture, Lua structured errors, the `emu.frameadvance()`/yield error path, and Lua state persistence. This combined path has been run successfully with the generated NROM ROM.
-- The same `--mode all` path now validates bridge input injection by using the generated ROM's `$4016` polling loop and RAM counters for A and Right button observations. `examples/bridge/20_input_smoke.py` runs only this input slice.
-- `python examples/bridge/18_runtime_smoke.py --token-file /tmp/fceux-bridge-123.token --rom test.nes` can run the same assertions against an already running bridge session.
-- `python examples/bridge/22_history_overhead.py --fceux /path/to/fceux --bridge-headless --bridge=stdio --sdl-dummy` launches a generated NROM ROM, alternates `HISTORY_CONFIG enabled=false` and `enabled=true`, advances fixed-size frame batches, and emits JSON with per-mode samples, mean milliseconds per frame, and enabled-vs-disabled overhead ratio/delta. It can also attach to an existing active session with `--token-file`.
+- `python src/bridge/sdk/python/examples/18_runtime_smoke.py --mode all --fceux /path/to/fceux --bridge-headless --bridge=stdio --sdl-dummy` additionally validates execute breakpoint setup, CPU write watchpoint setup, `REG_SET`, `RUN_UNTIL break`, structured run-until timeout, break-status correlation by bridge breakpoint/watchpoint id, disassembly/history around the hit, single-step response shape, `STEP_OVER` on a generated `JSR`, `STEP_OUT` from a generated subroutine with explicit stack setup, Lua print capture, Lua structured errors, the `emu.frameadvance()`/yield error path, and Lua state persistence. This combined path has been run successfully with the generated NROM ROM.
+- The same `--mode all` path now validates bridge input injection by using the generated ROM's `$4016` polling loop and RAM counters for A and Right button observations. `src/bridge/sdk/python/examples/20_input_smoke.py` runs only this input slice.
+- `python src/bridge/sdk/python/examples/18_runtime_smoke.py --token-file /tmp/fceux-bridge-123.token --rom test.nes` can run the same assertions against an already running bridge session.
+- `python src/bridge/sdk/python/examples/22_history_overhead.py --fceux /path/to/fceux --bridge-headless --bridge=stdio --sdl-dummy` launches a generated NROM ROM, alternates `HISTORY_CONFIG enabled=false` and `enabled=true`, advances fixed-size frame batches, and emits JSON with per-mode samples, mean milliseconds per frame, and enabled-vs-disabled overhead ratio/delta. It can also attach to an existing active session with `--token-file`.
 
 Golden or fixture ROMs:
 
@@ -771,7 +771,7 @@ Frame-gate off-by-one behavior:
 
 History overhead:
 
-- Mitigation: compact fixed-size records; optional enable/disable; no allocation in trace callback; avoid formatting disassembly unless requested or cache only opcode/state first. `examples/bridge/22_history_overhead.py` provides a repeatable runtime measurement so release candidates can capture the overhead of default history settings against the current build.
+- Mitigation: compact fixed-size records; optional enable/disable; no allocation in trace callback; avoid formatting disassembly unless requested or cache only opcode/state first. `src/bridge/sdk/python/examples/22_history_overhead.py` provides a repeatable runtime measurement so release candidates can capture the overhead of default history settings against the current build.
 
 Lua state conflicts:
 

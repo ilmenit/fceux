@@ -1,3 +1,8 @@
+FCEUX Bridge fork
+================
+Bridge downloads, SDK examples, and documentation: src/bridge/README.md
+Rolling Windows/Linux builds: https://github.com/ilmenit/fceux/releases/tag/nightly-bridge
+
 FCEUX SDL 2.6.4 SDL README
 ==========================
 Originally By Lukas Sabota (sf: punkrockguy318)

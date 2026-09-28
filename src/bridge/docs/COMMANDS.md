@@ -96,8 +96,8 @@ Authenticated session disconnect, `QUIT`, and bridge shutdown clear all bridge-o
 
 `SYM_LOAD path` supports ld65 `.dbg` files and explicit FCEUX `.nl` files. `SYM_LOAD auto=true` remains the easiest way to load all `.nl` sidecars that match the currently loaded ROM path.
 
-`examples/bridge/18_runtime_smoke.py` is the recommended quick regression check for the core command set. Prefer `--bridge-headless --bridge=stdio` when launching FCEUX from the smoke runner in CI or sandboxed environments. It launches FCEUX when given `--fceux`, or connects to an existing token file, then validates connection, frame, register, memory, state, history, and rawscreen behavior.
+`sdk/python/examples/18_runtime_smoke.py` is the recommended quick regression check for the core command set. Prefer `--bridge-headless --bridge=stdio` when launching FCEUX from the smoke runner in CI or sandboxed environments. It launches FCEUX when given `--fceux`, or connects to an existing token file, then validates connection, frame, register, memory, state, history, and rawscreen behavior.
 
-Use `examples/bridge/18_runtime_smoke.py --mode all` or `examples/bridge/19_debugger_lua_smoke.py` for the deeper debugger/Lua regression path covering breakpoints, `RUN_UNTIL`, hit status, stepping, disassembly/history, and persistent Lua eval.
+Use `sdk/python/examples/18_runtime_smoke.py --mode all` or `sdk/python/examples/19_debugger_lua_smoke.py` for the deeper debugger/Lua regression path covering breakpoints, `RUN_UNTIL`, hit status, stepping, disassembly/history, and persistent Lua eval.
 
-Use `examples/bridge/20_input_smoke.py` to verify bridge joypad injection end to end. The generated ROM polls `$4016` and updates RAM counters, so this tests input as observed by emulated software, not only `JOY` command responses.
+Use `sdk/python/examples/20_input_smoke.py` to verify bridge joypad injection end to end. The generated ROM polls `$4016` and updates RAM counters, so this tests input as observed by emulated software, not only `JOY` command responses.

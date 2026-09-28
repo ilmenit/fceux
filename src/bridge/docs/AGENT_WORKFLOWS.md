@@ -20,8 +20,8 @@ Useful loops for agents:
 - Use `SYM_LOAD`, `SYM_RESOLVE`, and `SYM_LOOKUP` when ld65 `.dbg` files or FCEUX `.nl` sidecars are available, so reports can mention labels instead of only raw addresses.
 - Use `LUA_LOAD` once for reusable bridge helper functions, `LUA_EVAL` for compact in-emulator probes, and `LUA_RESET` to clear helper state/hooks between experiments.
 - Use `Project.open(...)` to persist labels, comments, findings, screenshots, RAM dumps, history captures, CD logs, and ROM metadata in a git-friendly directory.
-- Use `examples/bridge/18_runtime_smoke.py --bridge-headless --bridge=stdio` after bridge changes to validate the basic agent loop against a generated tiny NROM ROM without requiring local socket bind permissions.
-- Use `examples/bridge/18_runtime_smoke.py --mode all` or `examples/bridge/19_debugger_lua_smoke.py` after debugger or Lua changes to validate breakpoints, `RUN_UNTIL`, history/disassembly at hits, stepping, and Lua eval persistence.
-- Use `examples/bridge/20_input_smoke.py` after input changes to validate `press()`, `hold()`, `JOY_CLEAR`, and `INPUT_STATE` against a ROM that polls `$4016`.
+- Use `sdk/python/examples/18_runtime_smoke.py --bridge-headless --bridge=stdio` after bridge changes to validate the basic agent loop against a generated tiny NROM ROM without requiring local socket bind permissions.
+- Use `sdk/python/examples/18_runtime_smoke.py --mode all` or `sdk/python/examples/19_debugger_lua_smoke.py` after debugger or Lua changes to validate breakpoints, `RUN_UNTIL`, history/disassembly at hits, stepping, and Lua eval persistence.
+- Use `sdk/python/examples/20_input_smoke.py` after input changes to validate `press()`, `hold()`, `JOY_CLEAR`, and `INPUT_STATE` against a ROM that polls `$4016`.
 
 Remaining major plan items are a richer project-analysis layer and a headless/server split.

@@ -49,3 +49,9 @@ fceux-net-server
 
 # typical CMake build directory
 /build
+
+# Python SDK and release packaging
+__pycache__/
+*.py[cod]
+/staging/
+/dist/

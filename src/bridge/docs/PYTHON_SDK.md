@@ -1,6 +1,9 @@
 # FCEUX Bridge Python SDK
 
-The initial SDK is dependency-free and lives under `bridge_sdk/python`.
+Run the commands in this guide from the extracted package root, or from
+`src/bridge` in a source checkout.
+
+The initial SDK is dependency-free and lives under `sdk/python`.
 It connects to `tcp:`, POSIX `unix:`, and Linux `unix-abstract:` endpoints from the bridge token file.
 
 Example:
@@ -83,7 +86,7 @@ Use `FceuxBridge.command_raw("RAW COMMAND")` when an expected error response sho
 SDK unit tests:
 
 ```bash
-PYTHONPATH=bridge_sdk/python python -m unittest discover -s bridge_sdk/python/tests
+PYTHONPATH=sdk/python python -m unittest discover -s sdk/python/tests
 ```
 
 These dependency-free tests cover client-side quoting, token-file validation, stdio-style command writes, structured error handling, close callbacks, `MEMSEARCH` pattern formatting, state save/load command construction, base64 response decoding, joypad helper cleanup, and `APP_EXIT` command construction.
@@ -91,7 +94,7 @@ These dependency-free tests cover client-side quoting, token-file validation, st
 Runtime smoke:
 
 ```bash
-PYTHONPATH=bridge_sdk/python python examples/bridge/18_runtime_smoke.py \
+PYTHONPATH=sdk/python python sdk/python/examples/18_runtime_smoke.py \
   --fceux /tmp/fceux-bridge-build/src/fceux \
   --bridge-headless \
   --bridge=stdio \
@@ -103,7 +106,7 @@ The smoke runner generates a tiny NROM test ROM when no ROM is supplied, waits f
 Debugger/Lua smoke:
 
 ```bash
-PYTHONPATH=bridge_sdk/python python examples/bridge/18_runtime_smoke.py \
+PYTHONPATH=sdk/python python sdk/python/examples/18_runtime_smoke.py \
   --mode all \
   --fceux /tmp/fceux-bridge-build/src/fceux \
   --bridge-headless \
@@ -111,12 +114,12 @@ PYTHONPATH=bridge_sdk/python python examples/bridge/18_runtime_smoke.py \
   --sdl-dummy
 ```
 
-`examples/bridge/19_debugger_lua_smoke.py` is a shortcut for `--mode debugger-lua`. It validates execute breakpoints, CPU write watchpoints, `REG_SET`, `RUN_UNTIL break`, structured `RUN_UNTIL` timeout errors, `BREAK_STATUS`, disassembly/history at the hit, single-step, step-over, step-out, Lua eval persistence/output capture, structured Lua eval errors, and the `emu.frameadvance()`/yield error path used to keep bridge eval non-yielding and session-safe.
+`sdk/python/examples/19_debugger_lua_smoke.py` is a shortcut for `--mode debugger-lua`. It validates execute breakpoints, CPU write watchpoints, `REG_SET`, `RUN_UNTIL break`, structured `RUN_UNTIL` timeout errors, `BREAK_STATUS`, disassembly/history at the hit, single-step, step-over, step-out, Lua eval persistence/output capture, structured Lua eval errors, and the `emu.frameadvance()`/yield error path used to keep bridge eval non-yielding and session-safe.
 
 Input smoke:
 
 ```bash
-PYTHONPATH=bridge_sdk/python python examples/bridge/20_input_smoke.py \
+PYTHONPATH=sdk/python python sdk/python/examples/20_input_smoke.py \
   --fceux /tmp/fceux-bridge-build/src/fceux \
   --bridge-headless \
   --bridge=stdio \
