@@ -77,7 +77,7 @@ jobs:
       - name: Build
         shell: pwsh
         run: |
-          cmake -S . -B build/nightly -G 'Visual Studio 17 2022' -A x64 -DQT=6 -DENABLE_BRIDGE=ON "-DSDL_INSTALL_PREFIX=$pwd/build/deps/SDL2-2.32.8" "-DLIBARCHIVE_INSTALL_PREFIX=$pwd/build/deps/vcpkg_installed/x64-windows"
+          cmake -S . -B build/nightly -G 'Visual Studio 17 2022' -A x64 -DCMAKE_CXX_FLAGS=/MP2 -DQT=6 -DENABLE_BRIDGE=ON "-DSDL_INSTALL_PREFIX=$pwd/build/deps/SDL2-2.32.8" "-DLIBARCHIVE_INSTALL_PREFIX=$pwd/build/deps/vcpkg_installed/x64-windows"
           if ($LASTEXITCODE -ne 0) { throw 'Configure failed' }
           cmake --build build/nightly --config Release --parallel 2
           if ($LASTEXITCODE -ne 0) { throw 'Build failed' }
